@@ -1,0 +1,257 @@
+{
+  "_comment": [
+    "Question templates for the cross-script entity-matching task.",
+    "Three paraphrases per language, mirroring the original Marathi and English set:",
+    "  1. are these the same person?   2. are these names for one person?   3. is X another name for Y?",
+    "The answer instruction stays in English for every language, exactly as in the",
+    "original design, so the response format is identical everywhere and does not",
+    "confound the script contrast.",
+    "",
+    "'reviewed' is false wherever no native speaker has checked the wording. A bad",
+    "template produces a false null that looks exactly like a model unable to do the",
+    "task, so treat an unreviewed language's null result as unconfirmed."
+  ],
+  "instruction": "\n\nAnswer only A or B. {yes} = yes. {no} = no.",
+  "languages": {
+    "en": {
+      "reviewed": true,
+      "templates": [
+        "Do [{a}] and [{b}] refer to the same person?",
+        "Are [{a}] and [{b}] names for the same person?",
+        "Is [{a}] another name for [{b}]?"
+      ]
+    },
+    "mr": {
+      "reviewed": true,
+      "templates": [
+        "[{a}] आणि [{b}] हे एकच व्यक्ती आहेत का?",
+        "[{a}] आणि [{b}] ही नावे एकाच व्यक्तीला दर्शवतात का?",
+        "[{a}] हे [{b}] यांचे दुसरे नाव आहे का?"
+      ]
+    },
+    "hi": {
+      "reviewed": false,
+      "templates": [
+        "क्या [{a}] और [{b}] एक ही व्यक्ति हैं?",
+        "क्या [{a}] और [{b}] एक ही व्यक्ति के नाम हैं?",
+        "क्या [{a}] [{b}] का दूसरा नाम है?"
+      ]
+    },
+    "ne": {
+      "reviewed": false,
+      "templates": [
+        "के [{a}] र [{b}] एउटै व्यक्ति हुन्?",
+        "के [{a}] र [{b}] एउटै व्यक्तिका नामहरू हुन्?",
+        "के [{a}] [{b}] को अर्को नाम हो?"
+      ]
+    },
+    "ta": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] மற்றும் [{b}] ஒரே நபரா?",
+        "[{a}] மற்றும் [{b}] ஒரே நபரின் பெயர்களா?",
+        "[{a}] என்பது [{b}] இன் மற்றொரு பெயரா?"
+      ]
+    },
+    "te": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] మరియు [{b}] ఒకే వ్యక్తియేనా?",
+        "[{a}] మరియు [{b}] ఒకే వ్యక్తి పేర్లేనా?",
+        "[{a}] అనేది [{b}] యొక్క మరో పేరా?"
+      ]
+    },
+    "kn": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] ಮತ್ತು [{b}] ಒಬ್ಬರೇ ವ್ಯಕ್ತಿಯೇ?",
+        "[{a}] ಮತ್ತು [{b}] ಒಬ್ಬರೇ ವ್ಯಕ್ತಿಯ ಹೆಸರುಗಳೇ?",
+        "[{a}] ಎಂಬುದು [{b}] ಅವರ ಇನ್ನೊಂದು ಹೆಸರೇ?"
+      ]
+    },
+    "ml": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] ഉം [{b}] ഉം ഒരേ വ്യക്തിയാണോ?",
+        "[{a}] ഉം [{b}] ഉം ഒരേ വ്യക്തിയുടെ പേരുകളാണോ?",
+        "[{a}] എന്നത് [{b}] ന്റെ മറ്റൊരു പേരാണോ?"
+      ]
+    },
+    "bn": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] এবং [{b}] কি একই ব্যক্তি?",
+        "[{a}] এবং [{b}] কি একই ব্যক্তির নাম?",
+        "[{a}] কি [{b}]-এর আরেকটি নাম?"
+      ]
+    },
+    "gu": {
+      "reviewed": false,
+      "templates": [
+        "શું [{a}] અને [{b}] એક જ વ્યક્તિ છે?",
+        "શું [{a}] અને [{b}] એક જ વ્યક્તિનાં નામ છે?",
+        "શું [{a}] એ [{b}]નું બીજું નામ છે?"
+      ]
+    },
+    "pa": {
+      "reviewed": false,
+      "templates": [
+        "ਕੀ [{a}] ਅਤੇ [{b}] ਇੱਕੋ ਵਿਅਕਤੀ ਹਨ?",
+        "ਕੀ [{a}] ਅਤੇ [{b}] ਇੱਕੋ ਵਿਅਕਤੀ ਦੇ ਨਾਮ ਹਨ?",
+        "ਕੀ [{a}] [{b}] ਦਾ ਦੂਜਾ ਨਾਮ ਹੈ?"
+      ]
+    },
+    "ru": {
+      "reviewed": false,
+      "templates": [
+        "Относятся ли [{a}] и [{b}] к одному и тому же человеку?",
+        "Являются ли [{a}] и [{b}] именами одного и того же человека?",
+        "Является ли [{a}] другим именем для [{b}]?"
+      ]
+    },
+    "ar": {
+      "reviewed": false,
+      "templates": [
+        "هل يشير [{a}] و [{b}] إلى نفس الشخص؟",
+        "هل [{a}] و [{b}] اسمان لنفس الشخص؟",
+        "هل [{a}] اسم آخر لـ [{b}]؟"
+      ]
+    },
+    "zh": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] 和 [{b}] 是同一个人吗？",
+        "[{a}] 和 [{b}] 是同一个人的名字吗？",
+        "[{a}] 是 [{b}] 的另一个名字吗？"
+      ]
+    },
+    "ko": {
+      "reviewed": false,
+      "templates": [
+        "[{a}]와(과) [{b}]는 같은 사람입니까?",
+        "[{a}]와(과) [{b}]는 같은 사람의 이름입니까?",
+        "[{a}]은(는) [{b}]의 다른 이름입니까?"
+      ]
+    },
+    "el": {
+      "reviewed": false,
+      "templates": [
+        "Αναφέρονται τα [{a}] και [{b}] στο ίδιο πρόσωπο;",
+        "Είναι τα [{a}] και [{b}] ονόματα του ίδιου προσώπου;",
+        "Είναι το [{a}] άλλο όνομα του [{b}];"
+      ]
+    },
+    "he": {
+      "reviewed": false,
+      "templates": [
+        "האם [{a}] ו-[{b}] מתייחסים לאותו אדם?",
+        "האם [{a}] ו-[{b}] הם שמות של אותו אדם?",
+        "האם [{a}] הוא שם אחר של [{b}]?"
+      ]
+    },
+    "th": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] และ [{b}] เป็นคนเดียวกันหรือไม่?",
+        "[{a}] และ [{b}] เป็นชื่อของคนเดียวกันหรือไม่?",
+        "[{a}] เป็นอีกชื่อหนึ่งของ [{b}] หรือไม่?"
+      ]
+    },
+    "ja": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] と [{b}] は同一人物ですか?",
+        "[{a}] と [{b}] は同じ人物の名前ですか?",
+        "[{a}] は [{b}] の別名ですか?"
+      ]
+    },
+    "sr": {
+      "reviewed": false,
+      "templates": [
+        "Да ли се [{a}] и [{b}] односе на исту особу?",
+        "Да ли су [{a}] и [{b}] имена исте особе?",
+        "Да ли је [{a}] друго име за [{b}]?"
+      ]
+    },
+    "ur": {
+      "reviewed": false,
+      "templates": [
+        "کیا [{a}] اور [{b}] ایک ہی شخص ہیں؟",
+        "کیا [{a}] اور [{b}] ایک ہی شخص کے نام ہیں؟",
+        "کیا [{a}] [{b}] کا دوسرا نام ہے؟"
+      ]
+    },
+    "vi": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] và [{b}] có phải là cùng một người không?",
+        "[{a}] và [{b}] có phải là tên của cùng một người không?",
+        "[{a}] có phải là tên khác của [{b}] không?"
+      ]
+    },
+    "tr": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] ve [{b}] aynı kişi mi?",
+        "[{a}] ve [{b}] aynı kişinin isimleri mi?",
+        "[{a}], [{b}] adlı kişinin başka bir adı mı?"
+      ]
+    },
+    "cs": {
+      "reviewed": false,
+      "templates": [
+        "Označují [{a}] a [{b}] tutéž osobu?",
+        "Jsou [{a}] a [{b}] jména téže osoby?",
+        "Je [{a}] jiné jméno pro [{b}]?"
+      ]
+    },
+    "yo": {
+      "reviewed": false,
+      "templates": [
+        "Ṣé [{a}] àti [{b}] jẹ́ ẹni kan náà?",
+        "Ṣé [{a}] àti [{b}] jẹ́ orúkọ ẹni kan náà?",
+        "Ṣé [{a}] jẹ́ orúkọ mìíràn fún [{b}]?"
+      ]
+    },
+    "is": {
+      "reviewed": false,
+      "templates": [
+        "Eiga [{a}] og [{b}] við sömu manneskju?",
+        "Eru [{a}] og [{b}] nöfn sömu manneskju?",
+        "Er [{a}] annað nafn á [{b}]?"
+      ]
+    },
+    "id": {
+      "reviewed": false,
+      "templates": [
+        "Apakah [{a}] dan [{b}] adalah orang yang sama?",
+        "Apakah [{a}] dan [{b}] adalah nama orang yang sama?",
+        "Apakah [{a}] adalah nama lain dari [{b}]?"
+      ]
+    },
+    "sw": {
+      "reviewed": false,
+      "templates": [
+        "Je, [{a}] na [{b}] ni mtu yule yule?",
+        "Je, [{a}] na [{b}] ni majina ya mtu yule yule?",
+        "Je, [{a}] ni jina lingine la [{b}]?"
+      ]
+    },
+    "de": {
+      "reviewed": false,
+      "templates": [
+        "Beziehen sich [{a}] und [{b}] auf dieselbe Person?",
+        "Sind [{a}] und [{b}] Namen für dieselbe Person?",
+        "Ist [{a}] ein anderer Name für [{b}]?"
+      ]
+    },
+    "fr": {
+      "reviewed": false,
+      "templates": [
+        "[{a}] et [{b}] désignent-ils la même personne ?",
+        "[{a}] et [{b}] sont-ils des noms de la même personne ?",
+        "[{a}] est-il un autre nom de [{b}] ?"
+      ]
+    }
+  }
+}
