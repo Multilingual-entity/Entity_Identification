@@ -1,0 +1,17 @@
+# PyTorch is preinstalled in Kaggle GPU images. Install it separately only if absent.
+transformers==4.48.3
+accelerate>=0.34,<2
+safetensors>=0.4.5
+sentencepiece>=0.2
+protobuf>=4.25
+pandas>=2.1,<3
+numpy>=1.26,<3
+scipy>=1.11,<2
+scikit-learn>=1.4,<2
+tqdm>=4.66
+indic-transliteration>=2.3
+# Stage 12's script-agnostic romanizer. Without it that scheme falls back to bare
+# diacritic stripping, which cannot romanize Devanagari, Tamil or Han at all, and the
+# arm reports a zero clean rate that looks like a finding rather than a missing package.
+anyascii>=0.3
+
