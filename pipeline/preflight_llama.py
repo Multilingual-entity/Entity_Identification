@@ -71,9 +71,28 @@ def main() -> None:
         has_tpl = getattr(tok, "chat_template", None) is not None
         check("tokenizer has a chat template", has_tpl)
         if has_tpl:
+            kwargs = dict(getattr(spec, "chat_kwargs", {}) or {})
             rendered = tok.apply_chat_template([{"role": "user", "content": "x"}],
-                                               tokenize=False, add_generation_prompt=True)
+                                               tokenize=False, add_generation_prompt=True,
+                                               **kwargs)
             check("chat template renders", isinstance(rendered, str) and len(rendered) > 0)
+            if kwargs:
+                print(f"chat_kwargs = {kwargs}")
+            # Every stage reads the answer logit at the last position. A template that
+            # ends inside a reasoning block puts reasoning text there instead, and the
+            # run completes with numbers that mean nothing. Sarvam-M enables thinking by
+            # default, which is why this check exists.
+            tail = rendered[-200:]
+            opens_reasoning = any(m in tail for m in
+                                  ("<think>", "<thinking>", "<reasoning>", "<|thinking|>"))
+            check("generation prompt does not open a reasoning block", not opens_reasoning,
+                  repr(tail[-60:]))
+            # And the next token should be able to be a bare label.
+            ids_plain = tok.encode("A", add_special_tokens=False)
+            ids_after = tok.encode(rendered + "A", add_special_tokens=False)
+            check("a label token can follow the generation prompt",
+                  ids_after[-1] == ids_plain[-1],
+                  f"{ids_after[-1]} vs {ids_plain[-1]}")
         dev = tok.encode("लेडी गागा", add_special_tokens=False)
         lat = tok.encode("Lady Gaga", add_special_tokens=False)
         print(f"fertility probe: 'Lady Gaga' -> {len(lat)} tokens | Devanagari -> {len(dev)} tokens")

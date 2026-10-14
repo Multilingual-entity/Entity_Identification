@@ -47,12 +47,16 @@ from pipeline_common import (
     seed_everything,
 )
 
-# A neutral frame, so the name is scored in a sentence rather than from a bare start of
-# sequence. Only reviewed languages get a hand-written carrier; anything else scores the
-# name unconditionally, which is still comparable across scripts within that language.
+# A neutral frame, so the name is scored in a sentence rather than from a bare start
+# of sequence. Every prompt language needs its own entry: a missing one is now an
+# error rather than a silent fallback, because the Hindi arm of the first run scored
+# its names unconditionally while Marathi and English scored theirs inside a
+# sentence, which made the two arms different measurements that still looked
+# comparable in the output.
 CARRIERS = {
     "en": "The person's name is ",
     "mr": "व्यक्तीचे नाव आहे ",
+    "hi": "व्यक्ति का नाम है ",
 }
 
 
@@ -216,7 +220,17 @@ def main() -> None:
     rows = []
     for n, row in enumerate(corpus.itertuples()):
         for context in args.contexts:
-            carrier = "" if args.no_carrier else CARRIERS.get(context, "")
+            if args.no_carrier:
+                carrier = ""
+            elif context in CARRIERS:
+                carrier = CARRIERS[context]
+            else:
+                raise SystemExit(
+                    f"no carrier phrase for {context!r}. Scoring it without one "
+                    f"would measure something different from the languages that "
+                    f"have one, so add it to CARRIERS or pass --no-carrier to "
+                    f"score every language unconditionally."
+                )
             for role in ("a", "b"):
                 for script in ("dev", "lat"):
                     name = str(getattr(row, f"name_{role}_{script}"))

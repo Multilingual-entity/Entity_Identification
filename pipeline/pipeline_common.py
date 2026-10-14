@@ -15,7 +15,7 @@ import os
 import random
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -111,6 +111,11 @@ class ModelSpec:
     model_id: str
     revision: str | None
     batch_size: int
+    # Extra keyword arguments for apply_chat_template. Needed by models whose template
+    # branches on a flag, such as a reasoning mode that is on by default: every stage
+    # here reads the answer logit at the last position, so a template that opens a
+    # thinking block instead would return reasoning text and quietly invalidate the run.
+    chat_kwargs: dict = field(default_factory=dict)
 
 
 MODEL_SPECS = {
@@ -165,6 +170,41 @@ MODEL_SPECS = {
         model_id="CohereForAI/aya-expanse-8b",
         revision=None,
         batch_size=24,
+    ),
+    # Mistral-Small-3.1-24B post-trained on eleven Indian languages, 40 layers, hidden
+    # size 5120. The most direct test the set has of whether the script gap survives a
+    # model built for Indic: its own card reports a large gain on romanized Indian
+    # language benchmarks, which is the manipulation this paper measures.
+    #
+    # enable_thinking is False deliberately and must stay that way. The default is True,
+    # and with it the generation prompt opens a reasoning block, so the next token is not
+    # the answer letter and every margin in the run would be nonsense. Run
+    # preflight_llama.py --model sarvam before committing GPU time.
+    #
+    # 24B in bfloat16 is about 48 GB of weights, so this needs an 80 GB card or two
+    # smaller ones, and a batch far below the 7B settings above.
+    # The control for sarvam: same family, same 24B size, same 40 layers and hidden size
+    # 5120, same 131k vocabulary, but no post-training on Indian languages. It separates
+    # "Indic tuning closed the gap" from "a bigger model closed the gap", which one model
+    # alone cannot.
+    #
+    # This is the 3.0 release, not 3.1. Both 3.1 checkpoints, base and instruct, are
+    # Mistral3ForConditionalGeneration with a Pixtral vision tower: unsupported by
+    # transformers 4.48.3, and their text layers do not sit at model.model.layers where
+    # get_layers looks. Sarvam-M itself is plain `mistral` because Sarvam removed the
+    # vision tower.
+    "mistral24": ModelSpec(
+        key="mistral24",
+        model_id="mistralai/Mistral-Small-24B-Instruct-2501",
+        revision=None,
+        batch_size=8,
+    ),
+    "sarvam": ModelSpec(
+        key="sarvam",
+        model_id="sarvamai/sarvam-m",
+        revision=None,
+        batch_size=8,
+        chat_kwargs={"enable_thinking": False},
     ),
 }
 
@@ -432,6 +472,7 @@ def load_model_and_tokenizer(model_key: str, batch_size: int | None = None):
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
+    tokenizer._chat_kwargs = dict(spec.chat_kwargs)
 
     model = AutoModelForCausalLM.from_pretrained(
         spec.model_id,
@@ -471,6 +512,7 @@ def load_tokenizer_only(model_key: str):
     tokenizer = AutoTokenizer.from_pretrained(spec.model_id, revision=spec.revision, use_fast=True)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer._chat_kwargs = dict(spec.chat_kwargs)
     return tokenizer
 
 
@@ -483,10 +525,16 @@ def get_layers(model):
 
 
 def format_chat(tokenizer, prompt: str) -> str:
+    """Render one user turn, ready for the model to emit the answer letter.
+
+    Per-model chat kwargs are stashed on the tokenizer at load time rather than threaded
+    through every call site, so that every existing caller picks them up unchanged.
+    """
     return tokenizer.apply_chat_template(
         [{"role": "user", "content": prompt}],
         tokenize=False,
         add_generation_prompt=True,
+        **getattr(tokenizer, "_chat_kwargs", {}),
     )
 
 

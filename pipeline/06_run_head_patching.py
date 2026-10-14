@@ -127,6 +127,13 @@ def main() -> None:
         args.screen_facts
     )
     heldout = stable.loc[stable["split"].isin(["validation", "test"])]
+    # Screen on the polarity the gate actually read. A model gated on negative pairs,
+    # such as Gemma, fails nothing on the positives, so screening there would select
+    # heads for behaviour the causal analysis never examines.
+    polarity = str(stable["polarity"].iloc[0]) if "polarity" in stable.columns \
+        else "positive"
+    gate_truth = 0 if polarity == "negative" else 1
+    print(f"screening heads on {polarity} pairs (truth={gate_truth})")
     if discovery.empty or heldout.empty:
         print("Insufficient train/held-out stable facts; head patching skipped.")
         return
@@ -146,8 +153,8 @@ def main() -> None:
     screen_records = []
     for candidate in discovery.itertuples():
         fid, context = str(candidate.fact_id), candidate.context
-        source = builder.make(fid, context, "LATLAT", 1, 0, "A")
-        target = builder.make(fid, context, "DEVDEV", 1, 0, "A")
+        source = builder.make(fid, context, "LATLAT", gate_truth, 0, "A")
+        target = builder.make(fid, context, "DEVDEV", gate_truth, 0, "A")
         source_position = semantic_token_positions(
             tokenizer, source["prompt"], source["a_text"], source["b_text"]
         )["E2"]

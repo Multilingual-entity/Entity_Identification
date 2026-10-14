@@ -150,6 +150,11 @@ def main() -> None:
     parser.add_argument("--contexts", nargs="+", default=["mr", "en"],
                         help="prompt languages; must have templates in question_templates.json")
     parser.add_argument("--max-facts-per-context", type=int, default=30)
+    parser.add_argument("--split-priority", nargs="+", default=["test", "train"],
+                        help="Splits to draw stable facts from, in order, until the cap "
+                             "is reached. Test first, so the paper's held-out component "
+                             "figures come from test items; train fills the remainder "
+                             "for the mechanism summary. Validation is not used.")
     parser.add_argument("--cumulative", action="store_true",
                         help="also patch each component at every layer up to the current "
                              "one, giving it the same accumulated history the residual "
@@ -183,10 +188,17 @@ def main() -> None:
     selected = candidates.loc[
         (candidates["stable"] == 1) & candidates["context"].isin(args.contexts)
     ]
+    # Explicit split priority. An earlier version sorted by split name and relied on
+    # "test" preceding "train" alphabetically, which gave the same items by accident.
+    selected = selected.loc[selected["split"].isin(args.split_priority)].copy()
+    selected["split_rank"] = selected["split"].map(
+        {s: i for i, s in enumerate(args.split_priority)}
+    )
     selected = (
-        selected.sort_values(["context", "split", "fact_id"])
+        selected.sort_values(["context", "split_rank", "fact_id"])
         .groupby("context", group_keys=False)
         .head(args.max_facts_per_context)
+        .drop(columns="split_rank")
     )
     if selected.empty:
         print("No stable causal facts; component patching skipped.")

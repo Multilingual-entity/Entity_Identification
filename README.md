@@ -65,15 +65,20 @@ A single 80GB GPU is enough. Stages are resumable and skip completed work unless
 
 ```bash
 cd pipeline
-python run_languages.py --languages mr --model qwen --corpus-root ../corpora \
-  --stages 00 01 02 03 04 05 06 07 08 09 10 11 12
+python run_languages.py --languages mr --model qwen --corpus-root ../corpora
 ```
 
-Swap `--languages hi` and `--model gemma` or `--model llama` for the other arms. Stage
-13 is separate:
+Swap `--languages hi` and `--model gemma` or `--model llama` for the other arms.
+Every stage runs by default, including stage 13; `--stages` narrows that.
+
+A stage run by hand must be given `--contexts`, because its parser defaults to
+`mr en`. Running stage 13 on a Hindi corpus without it silently scores Hindi names
+under Marathi prompts, and the output looks well-formed. The runner passes the flag
+for you, which is why it is the recommended entry point.
 
 ```bash
-python 13_jacobian_script_pair.py --run-dir results/qwen_mr --model qwen
+python 13_jacobian_script_pair.py --run-dir results/qwen_hi --model qwen \
+  --contexts hi en
 ```
 
 Expect roughly three hours per model on an A100, dominated by stages 04 and 07.
@@ -116,14 +121,88 @@ names, band them by sitelink count, and produce a review sheet for a human to ch
 The shipped corpora are the output of that process plus manual verification of every
 item.
 
-## Checking the numbers
+## The failure-conditioned mediator (stage 14)
 
-`analysis/paper_tables.py` regenerates tables from a results directory and compares them
-against a LaTeX source, reporting any numeric literal that differs:
+`14_failure_mediator.py` asks whether a low-rank subspace of the second-entity state,
+rather than the whole state, carries the repair:
+
+    h_{D<-L}^U  =  h_D  +  U U^T (h_L - h_D)
+
+`U` is learned through the frozen model with a failure-conditioned objective: repair the
+gated items, and leave everything that does not need repair alone. Standard DAS is run
+with the same parametrisation and the closure loss alone, so any gap between them comes
+from the conditioning and the specificity penalty rather than from the fit. Untrained
+baselines at the same rank and layer are a random subspace, PCA of the donor-minus-native
+differences, the mean difference, the probe direction, the Jacobian direction, and the
+full residual patch as an approximate upper bound.
+
+It fits on train and evaluates on validation. The test split is refused unless
+`--allow-test` is given, which exists for one frozen evaluation and nothing before it.
+The defaults hold prompt template 2 out of fitting entirely, so the reported numbers are
+leave-one-template-out.
+
+Run it in two phases; each prints its cost in forward passes before starting:
 
 ```bash
-python analysis/paper_tables.py --check
-python analysis/paper_tables.py --emit
+# phase 1: sweep the layer at one rank
+python pipeline/run_languages.py --stages 14 --languages mr --model qwen
+
+# phase 2: sweep the rank at the layer phase 1 selected on validation
+python pipeline/14_failure_mediator.py --run-dir results/qwen_mr --model qwen \
+    --contexts mr en --layers 16 --ranks 1 2 4 8
+```
+
+Stage 14 is not in the default stage list. It costs roughly 100,000 forward-backward
+passes per phase, which is not something an overnight run should pick up by accident.
+
+Two things the script protects you from. Resuming into a directory whose stored
+settings differ from the current arguments is refused, because `mediator_items.csv` is
+append-only and mixing settings would corrupt the summary; use `--force` or a different
+run directory. And `--precision-check` measures the bfloat16 floor on closure: a rank-1
+subspace spanning the donor-minus-native difference is algebraically the whole-state
+patch, so the margin gap between them is quantisation and nothing else.
+
+One caveat to read before trusting a specificity number: the `robust` control group
+(items answered correctly in both scripts) is nearly empty in native-script contexts,
+because a model that fails almost every Devanagari positive has almost no such item.
+Qwen Marathi validation has none. Specificity there rests on the `negatives` group, the
+same items at the other polarity, and on `never`, items wrong in both scripts. The
+script prints every group size and warns when a keep group is empty.
+
+`pipeline/test_14_failure_mediator.py` checks the subspace algebra, that a gradient
+reaches `U`, that every derived subspace is orthonormal at the requested rank, and that
+the item groups are disjoint. It needs no GPU and no model weights:
+
+```bash
+python pipeline/test_14_failure_mediator.py --run-dir ../results_mr/qwen_mr
+```
+
+## Checking the numbers
+
+`analysis/paper_tables.py` regenerates fourteen of the paper's tables from the result
+files and compares them against the LaTeX source, reporting any numeric literal that
+differs. Results may sit in more than one root; pass `--results` once per root. The
+Marathi and Hindi runs both have to be present, because the paper's Hindi rows come
+from the Hindi run:
+
+```bash
+python analysis/paper_tables.py --check --results ../results_mr --results ../results_hi \
+                                --paper ../paper/final_draft.tex
+python analysis/paper_tables.py --emit  --results ../results_mr --results ../results_hi \
+                                --out tables_generated
+```
+
+`RESULTS_DIR` (path-separator-separated) and `PAPER_TEX` are accepted in place of the
+flags. The fifteen tables the script does not regenerate are listed at the end of its
+output with the reduction that reproduces each; they were verified by hand.
+
+`analysis/dprime_bootstrap.py` recomputes the sensitivity gap and its interval,
+resampling items rather than prompts, because prompts derived from one item are not
+independent. Every pooled rate uses the log-linear estimator `(x + 0.5) / (n + 1)`.
+
+```bash
+python analysis/dprime_bootstrap.py --results results_mr --contexts mr en
+python analysis/dprime_bootstrap.py --results results_hi --contexts hi en
 ```
 
 `pipeline/audit_runs.py` reports what a run actually produced, which is not the same

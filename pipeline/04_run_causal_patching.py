@@ -19,6 +19,7 @@ from pipeline_common import (
     load_prepared_data,
     patch_margin,
     read_json,
+    REFERENCE_N_LAYERS,
     scale_layer,
     seed_everything,
     semantic_token_positions,
@@ -140,6 +141,18 @@ def main() -> None:
     parser.add_argument("--contexts", nargs="+", default=["mr", "en"],
                         help="prompt languages; must have templates in question_templates.json")
     parser.add_argument("--max-facts-per-context", type=int, default=60)
+    parser.add_argument("--fact-ids", type=Path, default=None,
+                        help="CSV with context and fact_id columns limiting the sweep to "
+                             "those items. A selection pass on items an earlier run "
+                             "already patched spends nothing new, which is how a layer "
+                             "gets chosen without consuming the never-patched set")
+    parser.add_argument("--splits", nargs="+", default=None,
+                        choices=["train", "validation", "test"],
+                        help="restrict to these splits. Use 'train validation' for a "
+                             "selection pass and 'test' for the single evaluation pass. "
+                             "Without it, selection takes test items first, because "
+                             "'test' sorts before 'train', so an exploratory sweep "
+                             "spends the held-out split before a layer is chosen.")
     parser.add_argument("--layer-low", type=int, default=8)
     parser.add_argument("--layer-high", type=int, default=20)
     parser.add_argument("--gate", choices=["accuracy", "margin", "either"],
@@ -197,11 +210,40 @@ def main() -> None:
     selected = candidates.loc[
         (candidates["stable"] == 1) & candidates["context"].isin(args.contexts)
     ].copy()
+    if args.fact_ids:
+        keep = pd.read_csv(args.fact_ids, dtype={"fact_id": str})
+        missing = {"context", "fact_id"} - set(keep.columns)
+        if missing:
+            raise SystemExit(f"{args.fact_ids} needs columns context and fact_id")
+        pairs = set(zip(keep["context"], keep["fact_id"]))
+        before = selected.fact_id.nunique()
+        selected = selected.loc[
+            [(c, str(f)) in pairs for c, f in zip(selected["context"], selected["fact_id"])]
+        ]
+        print(f"--fact-ids {args.fact_ids.name}: {selected.fact_id.nunique()} of "
+              f"{before} gated facts retained")
+        if selected.empty:
+            print("None of the listed fact ids are gated in this run. Nothing to do.")
+            return
+    if args.splits:
+        # Restricting by split is what separates a selection pass from an evaluation
+        # pass. Without it the default ordering takes test items first, because "test"
+        # sorts before "train", so an exploratory sweep silently spends the held-out
+        # split before any layer has been chosen.
+        before = selected.fact_id.nunique()
+        selected = selected.loc[selected["split"].isin(args.splits)]
+        print(f"splits {args.splits}: {selected.fact_id.nunique()} of {before} "
+              f"gated facts retained")
+        if selected.empty:
+            print("No gated facts in the requested splits. Nothing to do.")
+            return
     selected = (
         selected.sort_values(["context", "split", "fact_id"])
         .groupby("context", group_keys=False)
         .head(args.max_facts_per_context)
     )
+    print("selected by split: "
+          + str(selected.groupby(["context", "split"]).fact_id.nunique().to_dict()))
     if selected.empty:
         print("No stable LATLAT-success/DEVDEV-failure facts. Causal patching skipped.")
         return
@@ -216,14 +258,26 @@ def main() -> None:
     wrong_of = dict(zip(negatives["fact_id"].astype(str), negatives["negative_fact_id"].astype(str)))
     model, tokenizer, device, _, model_meta = load_model_and_tokenizer(args.model, args.batch_size)
     n_layers = model_meta["n_layers"]
-    layers = list(range(max(0, args.layer_low), min(n_layers, args.layer_high + 1)))
+    # --scale-layers has to reach the single-layer sweep as well as the windows. It did
+    # not, and the consequence is recorded in app:mistral: the published Mistral run was
+    # given this flag and still swept layers 8 to 20 of 40, missing the depth-matched
+    # equivalent of Qwen's layer 16 at about 23. A flag that scales half the experiments
+    # is worse than one that scales none, because the run looks depth-matched.
+    # On Qwen this is a no-op, scale_layer being the identity at the reference depth.
     if args.scale_layers:
+        sweep_low = scale_layer(args.layer_low, n_layers)
+        sweep_high = scale_layer(args.layer_high, n_layers)
         window_bounds = {
             name: (scale_layer(low, n_layers), scale_layer(high, n_layers))
             for name, (low, high) in WINDOWS.items()
         }
     else:
+        sweep_low, sweep_high = args.layer_low, args.layer_high
         window_bounds = dict(WINDOWS)
+    layers = list(range(max(0, sweep_low), min(n_layers, sweep_high + 1)))
+    print(f"single-layer sweep: {layers[0]}--{layers[-1]} of {n_layers}"
+          + (f" (scaled from {args.layer_low}--{args.layer_high} in the "
+             f"{REFERENCE_N_LAYERS}-layer reference)" if args.scale_layers else ""))
     windows = {
         name: [layer for layer in range(low, high + 1) if layer < n_layers]
         for name, (low, high) in window_bounds.items()
@@ -243,6 +297,9 @@ def main() -> None:
     window_desc = ", ".join(f"{k}={v[0]}-{v[-1]}" for k, v in windows.items() if v)
     print(f"layer sweep {layers[0]}-{layers[-1]} | windows {window_desc}")
     completed = set(read_json(done_path).get("completed", [])) if done_path.exists() else set()
+    # Items whose wrong-entity control could not be measured, reported at the end
+    # rather than raised, so one missing donor state does not discard the run.
+    skipped_controls: list[tuple] = []
 
     for candidate in selected.itertuples():
         key = f"{candidate.context}:{candidate.fact_id}"
@@ -411,9 +468,18 @@ def main() -> None:
                 )
 
             # Wrong-entity and wrong-position controls at the same layers.
-            control_fid = wrong_of[fid]
-            control_row = state_index[(control_fid, context, "LATLAT", truth)]
-            for layer in layers:
+            # The control needs a donor state for another fact, which state extraction
+            # may not hold if behaviour was incomplete for it. That is a reason to skip
+            # this item's controls and say so at the end, not to discard a whole run of
+            # completed patching.
+            control_fid = wrong_of.get(fid)
+            control_row = state_index.get((control_fid, context, "LATLAT", truth))
+            if control_row is None:
+                skipped_controls.append((fid, control_fid, context, truth))
+                control_layers = []
+            else:
+                control_layers = layers
+            for layer in control_layers:
                 wrong_entity = patch_margin(
                     model,
                     tokenizer,
@@ -509,6 +575,14 @@ def main() -> None:
     )
     summary.to_csv(paths["patching"] / "causal_patching_summary.csv", index=False)
     print("Saved:", final_path)
+    if skipped_controls:
+        ctxs = sorted({c for _, _, c, _ in skipped_controls})
+        print(f"wrong-entity control skipped for {len(skipped_controls)} "
+              f"item-polarity pairs in {ctxs}: the partner fact has no LATLAT "
+              f"state. Every other experiment for those items was measured.")
+        pd.DataFrame(skipped_controls,
+                     columns=["fact_id", "control_fact_id", "context", "truth"]
+                     ).to_csv(paths["patching"] / "skipped_controls.csv", index=False)
 
 
 if __name__ == "__main__":

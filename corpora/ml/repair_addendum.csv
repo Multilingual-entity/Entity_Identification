@@ -1,0 +1,7 @@
+fact_id,anchor_name_lat,anchor_name_mal,removed_distractor,removed_because,new_distractor,new_distractor_name_lat,new_distractor_name_mal,selection,split,reviewer_verdict,reviewer_note
+q1001,Mahatma Gandhi,മഹാത്മാ ഗാന്ധി,q41914,REMOVE: honorific,q7450,Asima Chattopadhyay,അസീമ ചട്ടോപാധ്യായ,"shared_occupation=False, shared_country=True, latin_similarity=0.52, distractor_already_used=True",train,,
+q28189,Abdus Salam,അബ്ദുസ്സലാം,q60429,REMOVE: honorific,q57068,Wilhelm Carl Werner Otto Fritz Franz Wien,വിൽഹെം കാൾ വെർണർ ഓട്ടോ ഫ്രിറ്റ്സ് ഫ്രാൻസ് വീൻ,"shared_occupation=True, shared_country=False, latin_similarity=0.09, distractor_already_used=True",train,,
+q312557,Varahagiri Venkata Giri,വരാഹഗിരി വെങ്കട ഗിരി,q295713,REMOVE: multi_alias,q297950,R. Venkataraman,ആർ. വെങ്കടരാമൻ,"shared_occupation=False, shared_country=True, latin_similarity=0.53, distractor_already_used=True",train,,
+q38203,Helen Keller,ഹെലൻ കെല്ലർ,q5284,REMOVE: multi_alias,q7245,Samuel Langhorne Clemens,സാമുവൽ ലാങ്ഹോൺ ക്ലെമൻസ്,"shared_occupation=False, shared_country=True, latin_similarity=0.24, distractor_already_used=False",test,,
+q55753,Shanta Shelke,ശാന്ത ഷെൾക്കെ,q231690,REMOVE: honorific,q1058,Narendrabhai Damodardas Modi,നരേന്ദ്രഭായ് ദാമോദർദാസ് മോദി,"shared_occupation=False, shared_country=False, latin_similarity=0.21, distractor_already_used=False",test,,
+q80732,Tenzing Norgay,ടെൻസിങ് നോർഗേ,q33817,REMOVE: honorific,q189542,Stefan Bengt Edberg,സ്റ്റെഫാൻ ബെങ്ത് എഡ്ബർഗ്,"shared_occupation=False, shared_country=False, latin_similarity=0.47, distractor_already_used=True",validation,,

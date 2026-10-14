@@ -27,3 +27,9 @@ env/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local edit backups.
+*.bak
+*.bak[0-9]
+*.bak_*
+.snap_*

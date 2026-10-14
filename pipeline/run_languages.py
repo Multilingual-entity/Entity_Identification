@@ -52,26 +52,30 @@ STAGES = {
     "10": ("10_name_surprisal.py", True, []),
     "11": ("11_name_order_swap.py", True, ["--patch"]),
     "12": ("12_romanization_schemes.py", True, []),
+    "13": ("13_jacobian_script_pair.py", True, []),
+    "14": ("14_failure_mediator.py", True, []),
 }
-DEFAULT_STAGES = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+DEFAULT_STAGES = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"]
+# 14 is deliberately absent: it trains a subspace through the frozen model and costs
+# roughly 100,000 forward-backward passes per phase. Ask for it with --stages 14.
 
 # Stages that take --contexts, verified against the scripts' own argument parsers rather
 # than assumed. 02 and 03 read the prompt languages from the tables 01 wrote and reject the
 # flag outright; 06 accepts it and was wrongly being denied it.
-TAKES_CONTEXTS = {"01", "04", "05", "06", "07", "09", "10", "11", "12"}
+TAKES_CONTEXTS = {"01", "04", "05", "06", "07", "09", "10", "11", "12", "13", "14"}
 
 # Gemma accepts nearly every positive pair, so a gate defined on binary correctness selects
 # nothing and stages 04 to 06 produce empty files. It needs the margin gate read on the
 # polarity it actually fails. Without this the run silently repeats the 299-fact outcome.
 MODEL_STAGE_ARGS = {
     "gemma": {"04": ["--gate", "margin", "--gate-polarity", "negative"]},
-    "llama": {**{s: ["--scale-layers"] for s in ("04", "05", "06", "07", "09", "11")},
+    "llama": {**{s: ["--scale-layers"] for s in ("04", "05", "06", "07", "09", "11", "13", "14")},
               "04": ["--scale-layers", "--gate", "either"]},
 }
 # Same for any deeper model added later; the band was fixed on a 28-layer network.
-for key in ("qwen14", "aya", "gemma9"):
+for key in ("qwen14", "aya", "gemma9", "sarvam", "mistral24"):
     MODEL_STAGE_ARGS.setdefault(key, {s: ["--scale-layers"] for s in
-                                      ("04", "05", "06", "07", "09", "11")})
+                                      ("04", "05", "06", "07", "09", "11", "13", "14")})
 
 
 def preflight(language: str, corpus_root: Path, contexts: list) -> tuple:

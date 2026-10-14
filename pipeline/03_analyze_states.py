@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from itertools import product
 
 import numpy as np
@@ -13,7 +14,6 @@ from sklearn.metrics import balanced_accuracy_score, recall_score, roc_auc_score
 from sklearn.model_selection import GroupKFold, StratifiedKFold, cross_val_predict
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler, normalize
-from transformers import AutoTokenizer
 
 from pipeline_common import (
     contexts_in_gate,
@@ -27,6 +27,10 @@ from pipeline_common import (
 
 
 POSITIONS = ["E1", "E2", "Q", "READOUT"]
+# Positions the held-out relation probe is fitted at. E2 is included because the causal
+# comparison of sec:patching is sited there, and a probe accuracy at the same position and
+# layer is what makes the two comparable; E1 is left out as it carries no label by design.
+_PROBE_POSITIONS = ("E2", "Q", "READOUT")
 ROLE_PAIRS = {
     "a": [("dev", "DEVDEV", "LATDEV"), ("lat", "DEVLAT", "LATLAT")],
     "b": [("dev", "DEVDEV", "DEVLAT"), ("lat", "LATDEV", "LATLAT")],
@@ -328,6 +332,8 @@ def subgroup_retrieval_tables(
 
 def tokenization_table(corpus: pd.DataFrame, model_key: str) -> pd.DataFrame:
     spec = MODEL_SPECS[model_key]
+    from transformers import AutoTokenizer
+
     tokenizer = AutoTokenizer.from_pretrained(spec.model_id, revision=spec.revision, use_fast=True)
     rows = []
     for _, row in corpus.iterrows():
@@ -445,6 +451,16 @@ def predictive_breakdown(
 def main() -> None:
     parser = argparse.ArgumentParser()
     add_common_args(parser)
+    parser.add_argument(
+        "--splits-from", type=Path, default=None,
+        help="a corpus.csv to take the split from instead of this run's own. Use it to "
+             "score one run's states on another run's split, which makes the two "
+             "comparable item by item. The fact_ids must match")
+    parser.add_argument(
+        "--splits-from-corpus", action="store_true",
+        help="take the probe's train/validation/test assignment from corpus.csv rather "
+             "than from the split inherited through behavior.csv. Without it, a "
+             "disagreement between the two is a hard error")
     args = parser.parse_args()
     seed_everything(args.seed)
     paths = ensure_run_dirs(args.run_dir)
@@ -452,6 +468,48 @@ def main() -> None:
     gate = pd.read_csv(paths["tables"] / "knowledge_gate.csv")
     isolated_meta = pd.read_csv(paths["states"] / "isolated_state_metadata.csv")
     pair_meta = pd.read_csv(paths["states"] / "pair_state_metadata.csv")
+
+    # The authoritative split lives in corpus.csv. pair_state_metadata.csv inherits its
+    # split from behavior.csv, and the two can disagree if the behavioural run was
+    # prepared separately, which is silent and makes probe numbers incomparable with
+    # anything scored off the corpus.
+    split_corpus = corpus
+    if args.splits_from is not None:
+        split_corpus = pd.read_csv(args.splits_from)
+        mine = set(corpus["fact_id"].astype(str))
+        theirs = set(split_corpus["fact_id"].astype(str))
+        if mine != theirs:
+            raise SystemExit(
+                f"--splits-from covers {len(theirs)} fact_ids and this run has "
+                f"{len(mine)}; {len(mine - theirs)} of mine are missing from it. "
+                f"Refusing to score on a split that does not cover the run.")
+        print(f"taking the split from {args.splits_from}, not this run's corpus.csv")
+        args.splits_from_corpus = True
+    corpus_split = split_corpus.set_index(split_corpus["fact_id"].astype(str))["split"]
+    meta_ids = pair_meta["fact_id"].astype(str)
+    from_corpus = meta_ids.map(corpus_split)
+    disagree = int((from_corpus.notna() & (from_corpus != pair_meta["split"])).sum())
+    if disagree:
+        n_facts = int(meta_ids[from_corpus.notna()
+                               & (from_corpus != pair_meta["split"])].nunique())
+        message = (
+            f"split mismatch: {disagree} pair rows across {n_facts} facts are assigned "
+            f"differently in corpus.csv and in the state metadata inherited from "
+            f"behavior.csv. Probe results would not be comparable with anything scored "
+            f"off corpus.csv."
+        )
+        if args.splits_from_corpus:
+            print(f"{message} Using corpus.csv, as --splits-from-corpus requests.")
+            pair_meta["split"] = from_corpus.fillna(pair_meta["split"])
+        else:
+            raise SystemExit(
+                f"{message} Re-run with --splits-from-corpus to use corpus.csv, or fix "
+                f"the behavioural run. Refusing to produce numbers that look comparable "
+                f"and are not."
+            )
+    elif args.splits_from_corpus:
+        print("corpus.csv and the state metadata agree on every split; "
+              "--splits-from-corpus changes nothing.")
     isolated_states = np.load(paths["states"] / "isolated_states.npy", mmap_mode="r")
     pair_states = np.load(paths["states"] / "pair_states.npy", mmap_mode="r")
 
@@ -468,7 +526,7 @@ def main() -> None:
     probe_summaries, probe_predictions = [], []
     heldout_summaries, heldout_predictions = [], []
     _ctxs = contexts_in(pair_meta)
-    for source_context, target_context, position in product(_ctxs, _ctxs, ("Q", "READOUT")):
+    for source_context, target_context, position in product(_ctxs, _ctxs, _PROBE_POSITIONS):
         summary, predictions = relation_probe_oof(
             pair_states,
             pair_meta,

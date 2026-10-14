@@ -65,14 +65,23 @@ def main() -> None:
     if heldout_probe_path.exists():
         heldout_probe = pd.read_csv(heldout_probe_path)
         for context in contexts_in(heldout_probe, "source_context"):
-            subset = heldout_probe.loc[
+            # Layer chosen on validation, reported on test. A maximum over layers on
+            # the test split would be a selection on test, which the paper rules out.
+            base = heldout_probe.loc[
                 (heldout_probe["source_context"] == context)
                 & (heldout_probe["target_context"] == context)
                 & (heldout_probe["position"] == "Q")
-                & (heldout_probe["evaluation_split"] == "test")
             ]
-            dashboard[f"relation_probe_best_test_balanced_{context}"] = float(
-                subset["balanced_accuracy"].max()
+            val = base.loc[base["evaluation_split"] == "validation"]
+            if val.empty:
+                continue
+            best_layer = int(val.loc[val["balanced_accuracy"].idxmax(), "layer"])
+            test = base.loc[
+                (base["evaluation_split"] == "test") & (base["layer"] == best_layer)
+            ]
+            dashboard[f"relation_probe_selected_layer_{context}"] = best_layer
+            dashboard[f"relation_probe_test_balanced_at_selected_{context}"] = float(
+                test["balanced_accuracy"].iloc[0]
             )
 
     exact_path = paths["tables"] / "exact_failure_probe_summary.csv"
@@ -87,7 +96,9 @@ def main() -> None:
     causal_path = paths["patching"] / "causal_patching.csv"
     if causal_path.exists():
         causal = pd.read_csv(causal_path)
-        heldout = causal.loc[causal["split"].isin(["validation", "test"])]
+        # The best window is chosen on validation alone; pooling validation with test
+        # here would let test items pick the window.
+        heldout = causal.loc[causal["split"] == "validation"]
         for context in heldout["context"].unique():
             same = heldout.loc[
                 (heldout["context"] == context)
